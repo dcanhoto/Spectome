@@ -1,0 +1,17 @@
+## Interface: 120100
+## Title: Spectome
+## Notes: Personal class/spec guide reference, multi-source.
+## Author:
+## Version: 0.1.0
+## SavedVariables: SpectomeDB
+## SavedVariablesPerCharacter: SpectomeCharDB
+
+Libs\LibStub\LibStub.lua
+
+Shared\Sources.lua
+
+UI\MainFrame.lua
+
+Sections\init.lua
+
+Spectome.lua

@@ -1,0 +1,4 @@
+-- Shared/Sources.lua
+-- Will hold the source registry (Icy Veins / Wowhead / Archon / Method) and the
+-- logic for switching which source's data is displayed for a given section.
+-- See reference/ClassCodex/Shared/Sources.lua for a structural pattern.

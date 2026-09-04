@@ -1,0 +1,4 @@
+-- Sections/init.lua
+-- Will be the tab registry: each section module (Rotation, Talents, Gear, Stats, ...)
+-- registers itself here so the main frame can build its tab list.
+-- See reference/ClassCodex/Sections/init.lua for a structural pattern.

@@ -1,0 +1,10 @@
+{
+  "Lua.workspace.library": [
+    "./Libs/WoWAPI/Annotations"
+  ],
+  "Lua.diagnostics.globals": [
+    "Spectome"
+  ],
+  "Lua.runtime.version": "Lua 5.1",
+  "Lua.workspace.checkThirdParty": false
+}

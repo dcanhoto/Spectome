@@ -1,0 +1,6 @@
+# External reference material — not part of the addon itself
+/reference/
+/Libs/WoWAPI/
+
+# OS/editor cruft
+.DS_Store
