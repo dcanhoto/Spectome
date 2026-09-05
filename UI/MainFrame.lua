@@ -6,7 +6,16 @@
 Spectome = Spectome or {}
 
 local frame = CreateFrame("Frame", "SpectomeMainFrame", UIParent, "PortraitFrameTemplate, BackdropTemplate")
-frame:SetSize(600, 500)
+-- 750 (from an earlier session) turned out to be more than BiS Gear's
+-- two-column list actually needs, leaving a large empty gap below shorter
+-- sections (Talents, Trinket Tier List). 640 was sized to what BiS Gear's
+-- right column (9 rows, ROW_GAP=8 between them) needs -- see the budget
+-- math in Sections/Gear.lua's comments -- but still clipped the last row's
+-- (Weapon) wrapped second line by a few px, so bumped by 30 to 670 for a
+-- bit more bottom margin. Content area below is anchored with relative
+-- insets (see frame.Content), not a fixed size, so it grows/shrinks to
+-- match whatever height the frame has.
+frame:SetSize(600, 670)
 frame:SetPoint("CENTER")
 frame:SetFrameStrata("HIGH")
 frame:SetTitle("Spectome")

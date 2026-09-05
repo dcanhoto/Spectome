@@ -1,27 +1,38 @@
 -- Sections/Gear.lua
--- Gear section: same source dropdown (UI/SourceDropdown.lua) pattern as
--- Sections/Talents.lua, with its own Overall/Mythic+ switcher (Gear-
--- specific contexts -- Talents keeps its separate Raid/Mythic+ pair),
--- rendering the recommended 15-slot gear list for whichever
--- source+context is selected.
+-- Gear section: source dropdown (UI/SourceDropdown.lua) at the top, then a
+-- BiS Gear / Trinket Tier List view toggle, then whichever view is active:
 --
--- Item icon/name loading follows the pattern reference/ClassCodex's
--- Shared/GearingUtils.lua uses: C_Item.GetItemIconByID + GetItemInfo first
--- (works instantly if the item is already cached), and if the name isn't
--- cached yet, C_Item.RequestLoadItemDataByID + a shared ITEM_DATA_LOAD_RESULT
--- listener refreshes just the affected row once the server responds.
--- itemID == 0 is the "no data yet" placeholder and is never queried.
+--   BiS Gear         -- Overall/Mythic+ switcher + two-column 15-slot list
+--                        (unchanged from before the toggle was added).
+--   Trinket Tier List -- a single flat list of trinkets grouped by tier
+--                        (S down through C), not split by context.
+--
+-- Both views share the same item icon/name loading + hover tooltip logic
+-- (RenderItemIcon + SetupItemTooltip below) rather than each reimplementing
+-- it. Item loading follows the pattern reference/ClassCodex's
+-- Shared/GearingUtils.lua uses: C_Item.GetItemIconByID + C_Item.GetItemInfo
+-- first (works instantly if the item is already cached), and if the name
+-- isn't cached yet, C_Item.RequestLoadItemDataByID + a shared
+-- ITEM_DATA_LOAD_RESULT listener refreshes just the affected row once the
+-- server responds. itemID == 0 is the "no data yet" placeholder (for both
+-- BiS slots and trinkets) and is never queried.
+--
+-- Class/spec comes from Shared/PlayerContext.lua (the logged-in
+-- character's actual class/spec, re-checked on PLAYER_TALENT_UPDATE and
+-- whenever this pane is shown) rather than a hardcoded class/spec. If
+-- Spectome.Data has no entry at all for the current class/spec, the normal
+-- UI is replaced with a "No data yet" message.
 
 Spectome = Spectome or {}
 
-local CURRENT_CLASS = "DeathKnight"
-local CURRENT_SPEC = "Blood"
-local DATA_TYPE = "gear"
+local DATA_TYPE = "gear" -- source filter for the dropdown -- trinket tier
+                         -- lists are a gear subtype, so both views draw
+                         -- their source list from the same "gear" sources.
 local NO_DATA_TEXT = "No data yet"
 local LOADING_TEXT = "Loading..."
 
 -- Fixed slot order -- matches Data/<Class>/gear-<source>.lua's `items`
--- array exactly, so builds don't need to be searched/matched by name.
+-- array exactly, so BiS builds don't need to be searched/matched by name.
 local SLOT_ORDER = {
 	"Head", "Neck", "Shoulder", "Back", "Chest", "Wrist", "Hands", "Waist",
 	"Legs", "Feet", "Ring 1", "Ring 2", "Trinket 1", "Trinket 2", "Weapon",
@@ -33,12 +44,30 @@ local CONTEXTS = {
 }
 local DEFAULT_CONTEXT = "overall"
 
-local SLOT_LABEL_WIDTH = 70
+-- BiS Gear / Trinket Tier List toggle.
+local VIEWS = {
+	{ view = "bis", label = "BiS Gear" },
+	{ view = "trinkets", label = "Trinket Tier List" },
+}
+local DEFAULT_VIEW = "bis"
+
+local TRINKET_TIER_ORDER = { "S", "A", "B", "C", "D" }
+-- Approximate rendered height of a GameFontNormal tier header line, used
+-- only to size the trinket scrollframe's content height (a slight
+-- overestimate just means a few extra px of scrollable space, not a bug).
+local TIER_HEADER_HEIGHT = 18
+
+-- Widened from 70 to fit "Trinket 1"/"Trinket 2" at the bumped label font
+-- (GameFontNormalSmall -> GameFontNormal, see slotLabel below).
+local SLOT_LABEL_WIDTH = 80
 local SLOT_ICON_SIZE = 18
 local SLOT_ROW_HEIGHT = 20
-local SLOT_ROW_EXTRA_LINE_HEIGHT = 14
+-- Vertical breathing room between one row's rendered content and the next
+-- row's slot label below it (rows previously sat flush against each
+-- other with no gap at all).
+local ROW_GAP = 8
 
--- Two-column layout: 15 rows in one long column overflowed past the
+-- Two-column BiS layout: 15 rows in one long column overflowed past the
 -- bottom of the fixed-size main frame, so slots split into a fixed
 -- 6/9 pair of columns instead of resizing the window. COLUMN_SPLIT is
 -- the SLOT_ORDER index of the last left-column slot (6 = Wrist; index 7,
@@ -54,15 +83,25 @@ local CATALYST_TEXT = "Use Catalyst for Set Piece"
 -- note reads as actionable/addon-highlighted rather than flavor text.
 local CATALYST_COLOR = { 0.2, 1.0, 0.6 }
 
-local function GetEntry(sourceId)
-	local byClass = Spectome.Data and Spectome.Data[CURRENT_CLASS]
-	local bySpec = byClass and byClass[CURRENT_SPEC]
-	local byDataType = bySpec and bySpec[DATA_TYPE]
+local function GetEntry(dataType, sourceId)
+	local classFolder, specName = Spectome.PlayerContext.Get()
+	local byClass = classFolder and Spectome.Data and Spectome.Data[classFolder]
+	local bySpec = specName and byClass and byClass[specName]
+	local byDataType = bySpec and bySpec[dataType]
 	return byDataType and byDataType[sourceId]
 end
 
+--- True if Spectome.Data has ANY entry at all for the current class/spec
+--- (see the matching helper in Sections/Talents.lua for the full
+--- reasoning) -- individual empty/placeholder fields inside existing data
+--- are a separate, already-handled case.
+local function HasAnyDataForCurrentSpec()
+	local classFolder, specName = Spectome.PlayerContext.Get()
+	return classFolder and specName and Spectome.Data and Spectome.Data[classFolder] and Spectome.Data[classFolder][specName] and true or false
+end
+
 local function GetBuild(sourceId, context)
-	local entry = GetEntry(sourceId)
+	local entry = GetEntry("gear", sourceId)
 	local builds = entry and entry.builds
 	if not builds then return nil end
 	for _, build in ipairs(builds) do
@@ -73,15 +112,20 @@ local function GetBuild(sourceId, context)
 	return nil
 end
 
+local function GetTrinketEntry(sourceId)
+	return GetEntry("trinkets", sourceId)
+end
+
 -------------------------------------------------------------------------------
--- Item loading: itemID 0 is never queried. Real IDs try the cache first;
+-- Shared item loading + tooltip: used by both BiS slot rows and Trinket
+-- Tier List rows. itemID 0 is never queried. Real IDs try the cache first;
 -- if the name isn't cached yet, request it and refresh the row once
 -- ITEM_DATA_LOAD_RESULT fires for that id.
 -------------------------------------------------------------------------------
 
 local pendingRows = {} -- itemId -> { row, row, ... } waiting on that item's load
 
-local function RenderSlotItem(row, itemId)
+local function RenderItemIcon(row, itemId)
 	row.itemId = itemId
 
 	if not itemId or itemId == 0 then
@@ -120,18 +164,39 @@ itemEventFrame:SetScript("OnEvent", function(_, _, itemId, success)
 	if success then
 		for _, row in ipairs(rows) do
 			-- The row may have been reassigned to a different item while
-			-- this load was in flight (source/context switch) -- only
+			-- this load was in flight (source/context/view switch) -- only
 			-- refresh it if it's still showing the item we requested.
 			if row.itemId == itemId then
-				RenderSlotItem(row, itemId)
+				RenderItemIcon(row, itemId)
 			end
 		end
 	end
 end)
 
+--- Wires up the hover tooltip common to any item row (BiS slot or
+--- trinket): shows the real item tooltip via GameTooltip:SetItemByID, and
+--- does nothing for the itemID == 0 placeholder state.
+--- `hoverRegion` is the frame that should actually catch the mouse (a
+--- small hitbox sized to the icon, since the icon itself is a plain
+--- Texture and can't be made mouse-interactive) -- everything else about
+--- the item (itemId) still lives on `row`, so the tooltip stays correct
+--- even though the frame receiving OnEnter/OnLeave is a different object.
+--- Falls back to `row` itself if no region is given.
+local function SetupItemTooltip(row, hoverRegion)
+	hoverRegion = hoverRegion or row
+	hoverRegion:EnableMouse(true)
+	hoverRegion:SetScript("OnEnter", function(self)
+		if not row.itemId or row.itemId == 0 then return end
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetItemByID(row.itemId)
+		GameTooltip:Show()
+	end)
+	hoverRegion:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
 local function RenderSlotRow(row, slotData)
 	local itemId = slotData and slotData.itemID or 0
-	RenderSlotItem(row, itemId)
+	RenderItemIcon(row, itemId)
 
 	-- No item selected yet means nothing to catalyze, regardless of the
 	-- data flag -- keep the row exactly as-is (no icon/badge/text) for
@@ -152,7 +217,7 @@ local function RenderSlotRow(row, slotData)
 	if showCatalyst then
 		row.secondaryText:SetPoint("TOPLEFT", row.catalystText, "BOTTOMLEFT", 0, -2)
 	else
-		row.secondaryText:SetPoint("TOPLEFT", row.nameText, "BOTTOMLEFT", 0, -2)
+		row.secondaryText:SetPoint("TOPLEFT", row.icon, "BOTTOMLEFT", 0, -2)
 	end
 	row.secondaryText:SetPoint("RIGHT", row, "RIGHT")
 
@@ -163,29 +228,85 @@ local function RenderSlotRow(row, slotData)
 		row.secondaryText:Hide()
 	end
 
-	local extraLines = (showCatalyst and 1 or 0) + (showSecondary and 1 or 0)
-	row:SetHeight(SLOT_ROW_HEIGHT + extraLines * SLOT_ROW_EXTRA_LINE_HEIGHT)
+	-- Measure each visible line's actual rendered height (GetStringHeight
+	-- reflects word-wrap, so a long obtainedFrom string that wraps to two
+	-- lines is accounted for) instead of assuming a fixed per-line height
+	-- -- a fixed guess under/overshoots depending on text length and was
+	-- letting rows overlap the one below them in the same column.
+	local height = SLOT_ICON_SIZE -- icon sets the row's floor height
+	if showCatalyst then
+		height = height + 2 + row.catalystText:GetStringHeight()
+	end
+	if showSecondary then
+		height = height + 2 + row.secondaryText:GetStringHeight()
+	end
+	row:SetHeight(math.max(height, SLOT_ROW_HEIGHT))
+end
+
+local function RenderTrinketRow(row, trinketData)
+	local itemId = trinketData and trinketData.itemID or 0
+	RenderItemIcon(row, itemId)
+
+	local notes = trinketData and trinketData.notes or ""
+	local showNotes = notes ~= ""
+	if showNotes then
+		row.notesText:SetText(notes)
+		row.notesText:Show()
+	else
+		row.notesText:Hide()
+	end
+
+	-- Same reasoning as RenderSlotRow: measure the actual rendered height
+	-- (accounts for word-wrap) instead of assuming a fixed per-line height.
+	local height = SLOT_ICON_SIZE
+	if showNotes then
+		height = height + 2 + row.notesText:GetStringHeight()
+	end
+	row:SetHeight(math.max(height, SLOT_ROW_HEIGHT))
 end
 
 Spectome.Sections:Register("gear", "Gear", function(content)
 	local activeSourceId
 	local activeContext = DEFAULT_CONTEXT
+	local activeView = DEFAULT_VIEW
 	local contextButtons = {}
+	local viewButtons = {}
 	local rows = {}
 
+	-- Every top-level widget that should be hidden together when the
+	-- current class/spec has no data at all (see noDataMessage below).
+	-- Children (context buttons, slot rows, etc.) are hidden automatically
+	-- when their parent is, so only these top-level ones need tracking.
+	-- Note this is separate from the BiS/Trinket view toggle's own
+	-- show/hide of contextRow/slotArea/trinketScroll (see SelectView) --
+	-- that logic only runs when there IS data, and hasData gates it.
+	local normalWidgets = {}
+	local function Tracked(widget)
+		table.insert(normalWidgets, widget)
+		return widget
+	end
+
 	-----------------------------------------------------------------------
-	-- Static layout: context switcher row (anchored to the source
-	-- dropdown once it exists, at the bottom of this function), then the
-	-- 15 slot rows.
+	-- Static layout: view toggle (anchored to the source dropdown once it
+	-- exists, at the bottom of this function), then either the BiS
+	-- Overall/Mythic+ switcher + two-column slot list, or the Trinket Tier
+	-- List -- only one of which is shown at a time.
 	-----------------------------------------------------------------------
 
-	local contextRow = CreateFrame("Frame", nil, content)
-	contextRow:SetPoint("TOPRIGHT", content, "TOPRIGHT")
-	contextRow:SetHeight(22)
+	local viewToggleRow = Tracked(CreateFrame("Frame", nil, content))
+	viewToggleRow:SetPoint("TOPRIGHT", content, "TOPRIGHT")
+	viewToggleRow:SetHeight(22)
 	-- (TOPLEFT anchor is set below, once the source dropdown exists.)
 
-	local slotArea = CreateFrame("Frame", nil, content)
-	slotArea:SetPoint("TOPLEFT", contextRow, "BOTTOMLEFT", 0, -12)
+	-- BiS Gear view -----------------------------------------------------
+
+	local contextRow = Tracked(CreateFrame("Frame", nil, content))
+	contextRow:SetPoint("TOPLEFT", viewToggleRow, "BOTTOMLEFT", 0, -8)
+	contextRow:SetPoint("RIGHT", content, "RIGHT")
+	contextRow:SetHeight(22)
+
+	local slotArea = Tracked(CreateFrame("Frame", nil, content))
+	slotArea:SetPoint("TOPLEFT", contextRow, "BOTTOMLEFT", 0, -8)
 	slotArea:SetPoint("RIGHT", content, "RIGHT")
 	slotArea:SetPoint("BOTTOM", content, "BOTTOM")
 
@@ -203,21 +324,26 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 	rightColumn:SetPoint("LEFT", slotArea, "CENTER", COLUMN_GAP / 2, 0)
 
 	local previousRowByColumn = {}
+	-- First row per column, so RefreshDisplay can shift it (and everything
+	-- chained below it) down by a computed padding to center the column's
+	-- actual content within slotArea when it's shorter than available.
+	local firstRowByColumn = {}
 	for i, slot in ipairs(SLOT_ORDER) do
 		local column = (i <= COLUMN_SPLIT) and leftColumn or rightColumn
 		local previousRow = previousRowByColumn[column]
 
 		local row = CreateFrame("Frame", nil, column)
 		if previousRow then
-			row:SetPoint("TOPLEFT", previousRow, "BOTTOMLEFT")
-			row:SetPoint("TOPRIGHT", previousRow, "BOTTOMRIGHT")
+			row:SetPoint("TOPLEFT", previousRow, "BOTTOMLEFT", 0, -ROW_GAP)
+			row:SetPoint("TOPRIGHT", previousRow, "BOTTOMRIGHT", 0, -ROW_GAP)
 		else
 			row:SetPoint("TOPLEFT", column, "TOPLEFT")
 			row:SetPoint("TOPRIGHT", column, "TOPRIGHT")
+			firstRowByColumn[column] = row
 		end
 		row:SetHeight(SLOT_ROW_HEIGHT)
 
-		local slotLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		local slotLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		slotLabel:SetPoint("TOPLEFT", 0, 0)
 		slotLabel:SetWidth(SLOT_LABEL_WIDTH)
 		slotLabel:SetJustifyH("LEFT")
@@ -229,7 +355,15 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 		icon:SetPoint("TOPLEFT", slotLabel, "TOPRIGHT", 6, 0)
 		row.icon = icon
 
-		local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		-- Textures can't receive mouse events themselves, so this small
+		-- frame sits exactly over the icon (SetAllPoints keeps it in sync)
+		-- to scope hover/tooltip to just the icon area -- not the whole
+		-- row, which used to trigger the tooltip from anywhere across its
+		-- full width, including empty space past the text.
+		local iconHitbox = CreateFrame("Frame", nil, row)
+		iconHitbox:SetAllPoints(icon)
+
+		local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		nameText:SetPoint("LEFT", icon, "RIGHT", 6, 0)
 		nameText:SetPoint("RIGHT", row, "RIGHT")
 		nameText:SetJustifyH("LEFT")
@@ -237,9 +371,11 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 
 		-- Actionable, addon-highlighted note -- distinct from the plain
 		-- gray secondaryText below, since "catalyze this" is something to
-		-- act on, not just flavor text.
-		local catalystText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		catalystText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
+		-- act on, not just flavor text. Anchored under the icon (not
+		-- nameText) so it starts flush with the content block's own left
+		-- edge instead of losing the icon's width+gap to indentation.
+		local catalystText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		catalystText:SetPoint("TOPLEFT", icon, "BOTTOMLEFT", 0, -2)
 		catalystText:SetPoint("RIGHT", row, "RIGHT")
 		catalystText:SetJustifyH("LEFT")
 		catalystText:SetTextColor(unpack(CATALYST_COLOR))
@@ -247,27 +383,231 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 		catalystText:Hide()
 		row.catalystText = catalystText
 
-		local secondaryText = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-		secondaryText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
+		-- Same reasoning as catalystText: anchored under the icon so it
+		-- gets the full content-block width for obtainedFrom/notes text
+		-- (RenderSlotRow re-anchors this below catalystText instead when
+		-- catalyst is shown, which is itself icon-aligned, so both cases
+		-- stay flush).
+		local secondaryText = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+		secondaryText:SetPoint("TOPLEFT", icon, "BOTTOMLEFT", 0, -2)
 		secondaryText:SetPoint("RIGHT", row, "RIGHT")
 		secondaryText:SetJustifyH("LEFT")
 		secondaryText:Hide()
 		row.secondaryText = secondaryText
 
-		row:EnableMouse(true)
-		row:SetScript("OnEnter", function(self)
-			if not self.itemId or self.itemId == 0 then return end
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetItemByID(self.itemId)
-			GameTooltip:Show()
-		end)
-		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		SetupItemTooltip(row, iconHitbox)
 
 		table.insert(rows, row)
 		previousRowByColumn[column] = row
 	end
 
+	-- Trinket Tier List view ---------------------------------------------
+
+	-- Wrapped in a scrollframe since the tier-grouped list has no fixed
+	-- height (a source can list any number of trinkets) and would
+	-- otherwise overflow past the bottom of the fixed-size main frame.
+	local trinketScroll = Tracked(CreateFrame("ScrollFrame", nil, content, "UIPanelScrollFrameTemplate"))
+	trinketScroll:SetPoint("TOPLEFT", viewToggleRow, "BOTTOMLEFT", 0, -8)
+	trinketScroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -22, 0)
+	trinketScroll:Hide()
+
+	-- Scroll child: needs an explicit width/height via SetSize -- unlike a
+	-- normally-anchored frame, a ScrollFrame's scroll child doesn't reliably
+	-- resolve a width from anchors alone (this was the cause of the tier
+	-- list rendering completely empty: the child's width stayed effectively
+	-- unset, so nothing inside it had anywhere to lay out). Width is fixed
+	-- to the scrollframe's own width (no horizontal scrolling needed);
+	-- height grows to fit whatever's been laid out -- both are (re)applied
+	-- at the top of RenderTrinketList too, since this main frame's size
+	-- never changes but re-asserting costs nothing and removes any doubt
+	-- about ordering.
+	local trinketArea = CreateFrame("Frame", nil, trinketScroll)
+	trinketArea:SetSize(math.max(1, trinketScroll:GetWidth()), 1)
+	trinketScroll:SetScrollChild(trinketArea)
+
+	local trinketHeaderByTier = {}
+	local trinketRowPool = {}
+
+	local function GetTrinketTierHeader(tier)
+		local header = trinketHeaderByTier[tier]
+		if header then return header end
+		header = trinketArea:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+		header:SetJustifyH("LEFT")
+		header:SetText(tier .. " Tier")
+		trinketHeaderByTier[tier] = header
+		return header
+	end
+
+	local function GetTrinketRow(index)
+		local row = trinketRowPool[index]
+		if row then return row end
+
+		row = CreateFrame("Frame", nil, trinketArea)
+		row:SetHeight(SLOT_ROW_HEIGHT)
+
+		local icon = row:CreateTexture(nil, "ARTWORK")
+		icon:SetSize(SLOT_ICON_SIZE, SLOT_ICON_SIZE)
+		icon:SetPoint("TOPLEFT", 0, 0)
+		row.icon = icon
+
+		-- See the matching comment in the BiS row loop above -- textures
+		-- can't receive mouse events, so this hitbox scopes hover/tooltip
+		-- to just the icon instead of the whole row.
+		local iconHitbox = CreateFrame("Frame", nil, row)
+		iconHitbox:SetAllPoints(icon)
+
+		local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		nameText:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+		nameText:SetPoint("RIGHT", row, "RIGHT")
+		nameText:SetJustifyH("LEFT")
+		row.nameText = nameText
+
+		local notesText = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+		notesText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
+		notesText:SetPoint("RIGHT", row, "RIGHT")
+		notesText:SetJustifyH("LEFT")
+		notesText:Hide()
+		row.notesText = notesText
+
+		SetupItemTooltip(row, iconHitbox)
+
+		trinketRowPool[index] = row
+		return row
+	end
+
+	-- Rebuilds the whole tier list every call (source/view changes are
+	-- infrequent user actions, and the list is short) rather than tracking
+	-- incremental diffs. Rows/headers are pooled and reused across calls;
+	-- indent (12px) visually nests trinkets under their tier header.
+	local function RenderTrinketList()
+		local scrollWidth = trinketScroll:GetWidth()
+		if scrollWidth and scrollWidth > 0 then
+			trinketArea:SetWidth(scrollWidth)
+		end
+
+		local entry = activeSourceId and GetTrinketEntry(activeSourceId)
+		local trinkets = entry and entry.trinkets or {}
+
+		local byTier = {}
+		for _, trinketData in ipairs(trinkets) do
+			byTier[trinketData.tier] = byTier[trinketData.tier] or {}
+			table.insert(byTier[trinketData.tier], trinketData)
+		end
+
+		local previousFrame
+		local firstFrame -- the very first tier header rendered, for the centering re-anchor below
+		local rowCount = 0
+		local usedTiers = {}
+		-- Tracked alongside the anchor chain (rather than read back via
+		-- GetTop/GetBottom afterward) so the scroll child's height is
+		-- known exactly regardless of current scroll position.
+		local contentHeight = 0
+
+		for _, tier in ipairs(TRINKET_TIER_ORDER) do
+			local tierEntries = byTier[tier]
+			if tierEntries and #tierEntries > 0 then
+				usedTiers[tier] = true
+				local header = GetTrinketTierHeader(tier)
+				header:ClearAllPoints()
+				if previousFrame then
+					header:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 0, -10)
+					contentHeight = contentHeight + 10
+				else
+					header:SetPoint("TOPLEFT", trinketArea, "TOPLEFT", 0, 0)
+					firstFrame = header
+				end
+				header:Show()
+				previousFrame = header
+				contentHeight = contentHeight + TIER_HEADER_HEIGHT
+
+				for _, trinketData in ipairs(tierEntries) do
+					rowCount = rowCount + 1
+					local row = GetTrinketRow(rowCount)
+					row:ClearAllPoints()
+					row:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 12, -4)
+					row:SetPoint("RIGHT", trinketArea, "RIGHT")
+					RenderTrinketRow(row, trinketData)
+					row:Show()
+					previousFrame = row
+					contentHeight = contentHeight + 4 + row:GetHeight()
+				end
+			end
+		end
+
+		for _, tier in ipairs(TRINKET_TIER_ORDER) do
+			if not usedTiers[tier] and trinketHeaderByTier[tier] then
+				trinketHeaderByTier[tier]:Hide()
+			end
+		end
+		for i = rowCount + 1, #trinketRowPool do
+			trinketRowPool[i]:Hide()
+		end
+
+		-- Center the rendered content vertically within the scrollframe's
+		-- viewport when it's shorter than the available space, instead of
+		-- always sitting flush against the top with empty space below.
+		-- Padding is added to both the first header's offset AND the
+		-- content height, so the scroll range still matches what's
+		-- actually laid out (avoiding a mismatch that would make the last
+		-- bit of padding-shifted content unreachable by scrolling).
+		local topPadding = 0
+		if firstFrame then
+			local viewportHeight = trinketScroll:GetHeight() or 0
+			if contentHeight > 0 and contentHeight < viewportHeight then
+				topPadding = (viewportHeight - contentHeight) / 2
+			end
+			firstFrame:ClearAllPoints()
+			firstFrame:SetPoint("TOPLEFT", trinketArea, "TOPLEFT", 0, -topPadding)
+		end
+
+		trinketArea:SetHeight(math.max(1, contentHeight + topPadding))
+	end
+
+	-- Shown instead of the widgets above when the current class/spec has
+	-- no Data/<Class>/ folder scaffolded at all yet.
+	local noDataMessage = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+	noDataMessage:SetPoint("TOPLEFT", content, "TOPLEFT")
+	noDataMessage:SetPoint("RIGHT", content, "RIGHT")
+	noDataMessage:SetJustifyH("LEFT")
+	noDataMessage:SetWordWrap(true)
+	noDataMessage:Hide()
+
+	-----------------------------------------------------------------------
+	-- Refresh + selection plumbing
+	-----------------------------------------------------------------------
+
 	local function RefreshDisplay()
+		if not HasAnyDataForCurrentSpec() then
+			local _, specName, displayClassName = Spectome.PlayerContext.Get()
+			noDataMessage:SetText(("No data yet for %s %s -- check back once this spec has been added."):format(
+				specName or "your current spec", displayClassName or "your class"
+			))
+			noDataMessage:Show()
+			for _, widget in ipairs(normalWidgets) do
+				widget:Hide()
+			end
+			return
+		end
+
+		noDataMessage:Hide()
+		for _, widget in ipairs(normalWidgets) do
+			widget:Show()
+		end
+
+		-- The view toggle governs which of contextRow/slotArea/trinketScroll
+		-- should actually be visible (set here, not in SelectView, so this
+		-- stays correct on every RefreshDisplay call -- e.g. one triggered
+		-- by OnChange/OnShow rather than a click on the toggle itself).
+		local isBis = (activeView == "bis")
+		contextRow:SetShown(isBis)
+		slotArea:SetShown(isBis)
+		trinketScroll:SetShown(not isBis)
+
+		if activeView == "trinkets" then
+			RenderTrinketList()
+			return
+		end
+
 		local build = activeSourceId and GetBuild(activeSourceId, activeContext)
 		local items = build and build.items
 
@@ -279,10 +619,54 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 			local isActive = (context == activeContext)
 			button:SetButtonState(isActive and "PUSHED" or "NORMAL", isActive)
 		end
+
+		-- Vertically center the two-column slot list within slotArea when
+		-- the taller column's actual content is shorter than the space
+		-- available, instead of always sitting flush against the top with
+		-- empty space below. Both columns get the SAME padding (derived
+		-- from whichever column is taller) so their rows stay aligned
+		-- side by side rather than drifting to different starting rows.
+		local function ColumnContentHeight(column, lastRow)
+			if not lastRow then return 0 end
+			local top = column:GetTop()
+			local bottom = lastRow:GetBottom()
+			if not top or not bottom then return 0 end
+			return top - bottom
+		end
+
+		local leftHeight = ColumnContentHeight(leftColumn, previousRowByColumn[leftColumn])
+		local rightHeight = ColumnContentHeight(rightColumn, previousRowByColumn[rightColumn])
+		local actualHeight = math.max(leftHeight, rightHeight)
+		local available = slotArea:GetHeight() or 0
+		local padding = 0
+		if actualHeight > 0 and actualHeight < available then
+			padding = (available - actualHeight) / 2
+		end
+
+		for _, column in ipairs({ leftColumn, rightColumn }) do
+			local firstRow = firstRowByColumn[column]
+			if firstRow then
+				firstRow:ClearAllPoints()
+				firstRow:SetPoint("TOPLEFT", column, "TOPLEFT", 0, -padding)
+				firstRow:SetPoint("TOPRIGHT", column, "TOPRIGHT", 0, -padding)
+			end
+		end
 	end
 
 	local function SelectContext(context)
 		activeContext = context
+		RefreshDisplay()
+	end
+
+	local function SelectView(view)
+		if activeView == view then return end
+		activeView = view
+
+		for viewId, button in pairs(viewButtons) do
+			local isActive = (viewId == view)
+			button:SetButtonState(isActive and "PUSHED" or "NORMAL", isActive)
+		end
+
 		RefreshDisplay()
 	end
 
@@ -302,11 +686,42 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 		previousContextButton = button
 	end
 
-	local sourceDropdown = Spectome.UI.CreateSourceDropdown(content, DATA_TYPE, function(sourceId)
+	local previousViewButton
+	for _, v in ipairs(VIEWS) do
+		local button = CreateFrame("Button", nil, viewToggleRow, "UIPanelButtonTemplate")
+		button:SetSize(v.view == "bis" and 80 or 140, 22)
+		button:SetText(v.label)
+		if previousViewButton then
+			button:SetPoint("LEFT", previousViewButton, "RIGHT", 6, 0)
+		else
+			button:SetPoint("LEFT", viewToggleRow, "LEFT", 0, 0)
+		end
+		button:SetScript("OnClick", function() SelectView(v.view) end)
+
+		viewButtons[v.view] = button
+		previousViewButton = button
+	end
+	viewButtons[DEFAULT_VIEW]:SetButtonState("PUSHED", true)
+
+	local sourceDropdown = Tracked(Spectome.UI.CreateSourceDropdown(content, DATA_TYPE, function(sourceId)
 		activeSourceId = sourceId
 		activeContext = DEFAULT_CONTEXT
 		RefreshDisplay()
-	end)
+	end))
 	sourceDropdown:SetPoint("TOPLEFT")
-	contextRow:SetPoint("TOPLEFT", sourceDropdown, "BOTTOMLEFT", 0, -10)
+	viewToggleRow:SetPoint("TOPLEFT", sourceDropdown, "BOTTOMLEFT", 0, -8)
+
+	-- Re-check class/spec whenever the player's talent loadout changes
+	-- (covers respeccing) and whenever this pane becomes visible again
+	-- (covers a respec that happened while the panel/tab was closed, which
+	-- PLAYER_TALENT_UPDATE wouldn't have reached us for).
+	Spectome.PlayerContext.OnChange(RefreshDisplay)
+	content:SetScript("OnShow", RefreshDisplay)
+
+	-- The very first RefreshDisplay (triggered above, inside
+	-- CreateSourceDropdown's initial selection) ran before viewToggleRow's
+	-- TOPLEFT anchor just above was set, so contextRow/slotArea's geometry
+	-- (and this centering math) wasn't fully resolved yet. Re-run now that
+	-- the whole chain is complete.
+	RefreshDisplay()
 end)

@@ -20,9 +20,9 @@ Spectome.Data.DeathKnight.Blood.talents.method = {
 	builds = {
 		{
 			context = "raid",
-			heroTalent = "San'layn",
-			loadoutString = "CoPAAAAAAAAAAAAAAAAAAAAAAwYWmZGmxMzMMbzMz0MbGzMmxAAAAAmZmZmZmZYGjBAjZmZGAAADMwMW0YZDklBsBYGzAAAmZghB",
-			notes = "",
+			heroTalent = "Deathbringer",
+			loadoutString = "CoPAAAAAAAAAAAAAAAAAAAAAAwYWGzMmxMzMYbmZmmZZGjxMGAAAAwMzMzMzMDzYMAYMzMzAAAMmtBGwSwywEYYBwMmBAgZGAzYA",
+			notes = "Method now recommends Deathbringer over San'layn for raid, as of this update",
 		},
 		{
 			context = "mythicPlus",
