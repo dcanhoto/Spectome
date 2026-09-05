@@ -2,8 +2,13 @@
 -- Gear section: source dropdown (UI/SourceDropdown.lua) at the top, then a
 -- BiS Gear / Trinket Tier List view toggle, then whichever view is active:
 --
---   BiS Gear         -- Overall/Mythic+ switcher + two-column 15-slot list
---                        (unchanged from before the toggle was added).
+--   BiS Gear         -- Overall/Mythic+ switcher + two-column slot list,
+--                        one row per entry in the current build's `items`
+--                        array (in data order) -- most class/spec/source
+--                        combos have the usual 15 slots, but a combo can
+--                        add an extra slot (e.g. Arms Warrior's "Alt Main
+--                        Hand") without touching any other combo's data or
+--                        this rendering code.
 --   Trinket Tier List -- a single flat list of trinkets grouped by tier
 --                        (S down through C), not split by context.
 --
@@ -30,13 +35,6 @@ local DATA_TYPE = "gear" -- source filter for the dropdown -- trinket tier
                          -- their source list from the same "gear" sources.
 local NO_DATA_TEXT = "No data yet"
 local LOADING_TEXT = "Loading..."
-
--- Fixed slot order -- matches Data/<Class>/gear-<source>.lua's `items`
--- array exactly, so BiS builds don't need to be searched/matched by name.
-local SLOT_ORDER = {
-	"Head", "Neck", "Shoulder", "Back", "Chest", "Wrist", "Hands", "Waist",
-	"Legs", "Feet", "Ring 1", "Ring 2", "Trinket 1", "Trinket 2", "Weapon",
-}
 
 local CONTEXTS = {
 	{ context = "overall", label = "Overall" },
@@ -67,13 +65,17 @@ local SLOT_ROW_HEIGHT = 20
 -- other with no gap at all).
 local ROW_GAP = 8
 
--- Two-column BiS layout: 15 rows in one long column overflowed past the
+-- Two-column BiS layout: a single long column of rows overflowed past the
 -- bottom of the fixed-size main frame, so slots split into a fixed
--- 6/9 pair of columns instead of resizing the window. COLUMN_SPLIT is
--- the SLOT_ORDER index of the last left-column slot (6 = Wrist; index 7,
--- Hands, starts the right column) -- column 1 ends up with extra empty
--- space below its 6 rows since column 2 has more, which is expected and
--- not something to rebalance.
+-- 6/rest pair of columns instead of resizing the window. COLUMN_SPLIT is
+-- how many of the current build's items (in data order) go in the left
+-- column before the rest fall into the right column -- e.g. with the usual
+-- 15-slot data that's items 1-6 (Head-Wrist) left, 7-15 (Hands-Weapon)
+-- right; a 16-slot build (an extra "Alt Main Hand" appended at the end)
+-- naturally puts its 16th item at the bottom of the right column with no
+-- other change needed. Column 1 ends up with extra empty space below its
+-- rows whenever column 2 has more, which is expected and not something to
+-- rebalance.
 local COLUMN_SPLIT = 6
 local COLUMN_GAP = 16
 local PLACEHOLDER_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -271,7 +273,6 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 	local activeView = DEFAULT_VIEW
 	local contextButtons = {}
 	local viewButtons = {}
-	local rows = {}
 
 	-- Every top-level widget that should be hidden together when the
 	-- current class/spec has no data at all (see noDataMessage below).
@@ -323,31 +324,41 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 	rightColumn:SetPoint("BOTTOMRIGHT", slotArea, "BOTTOMRIGHT")
 	rightColumn:SetPoint("LEFT", slotArea, "CENTER", COLUMN_GAP / 2, 0)
 
-	local previousRowByColumn = {}
-	-- First row per column, so RefreshDisplay can shift it (and everything
-	-- chained below it) down by a computed padding to center the column's
-	-- actual content within slotArea when it's shorter than available.
+	-- Pooled per-column row widgets -- built on demand (GetSlotRow below)
+	-- rather than one fixed-size loop, since the number of rows in each
+	-- column now depends on how many items the currently selected build
+	-- actually has (see RenderSlotRows), not a fixed slot list. A pool
+	-- index only ever renders slots from its own column (item i <=
+	-- COLUMN_SPLIT always left, i > COLUMN_SPLIT always right), so each
+	-- pooled row's parent never needs to change once created.
+	local leftRowPool = {}
+	local rightRowPool = {}
+	-- First/last row actually rendered per column on the most recent
+	-- RenderSlotRows call, so RefreshDisplay's centering math (below) can
+	-- measure and re-anchor them -- reset and repopulated every call
+	-- rather than fixed once at setup, since which rows are "first"/"last"
+	-- can change as the item count changes between sources.
 	local firstRowByColumn = {}
-	for i, slot in ipairs(SLOT_ORDER) do
-		local column = (i <= COLUMN_SPLIT) and leftColumn or rightColumn
-		local previousRow = previousRowByColumn[column]
+	local previousRowByColumn = {}
 
-		local row = CreateFrame("Frame", nil, column)
-		if previousRow then
-			row:SetPoint("TOPLEFT", previousRow, "BOTTOMLEFT", 0, -ROW_GAP)
-			row:SetPoint("TOPRIGHT", previousRow, "BOTTOMRIGHT", 0, -ROW_GAP)
-		else
-			row:SetPoint("TOPLEFT", column, "TOPLEFT")
-			row:SetPoint("TOPRIGHT", column, "TOPRIGHT")
-			firstRowByColumn[column] = row
+	local function ClearTable(t)
+		for key in pairs(t) do
+			t[key] = nil
 		end
+	end
+
+	--- Builds one fully-wired (but not yet positioned or filled with
+	--- data) row widget under `column` -- identical to what used to be
+	--- built inline for each entry of a fixed slot list, just factored out
+	--- so GetSlotRow can create these on demand as more rows are needed.
+	local function CreateSlotRowWidget(column)
+		local row = CreateFrame("Frame", nil, column)
 		row:SetHeight(SLOT_ROW_HEIGHT)
 
 		local slotLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		slotLabel:SetPoint("TOPLEFT", 0, 0)
 		slotLabel:SetWidth(SLOT_LABEL_WIDTH)
 		slotLabel:SetJustifyH("LEFT")
-		slotLabel:SetText(slot)
 		row.slotLabel = slotLabel
 
 		local icon = row:CreateTexture(nil, "ARTWORK")
@@ -397,8 +408,67 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 
 		SetupItemTooltip(row, iconHitbox)
 
-		table.insert(rows, row)
-		previousRowByColumn[column] = row
+		return row
+	end
+
+	local function GetSlotRow(pool, column, index)
+		local row = pool[index]
+		if row then return row end
+		row = CreateSlotRowWidget(column)
+		pool[index] = row
+		return row
+	end
+
+	--- Renders one row per entry in `items` (in data order), splitting
+	--- the first COLUMN_SPLIT into leftColumn and the rest into
+	--- rightColumn -- generalizes what used to be a fixed SLOT_ORDER loop
+	--- so a build can have any number of slots (e.g. an extra "Alt Main
+	--- Hand" appended after the usual 15) without any other code needing
+	--- to change. Pooled rows beyond what's needed this call are hidden,
+	--- not destroyed, so switching back to a build with more slots later
+	--- doesn't have to recreate widgets.
+	local function RenderSlotRows(items)
+		ClearTable(firstRowByColumn)
+		ClearTable(previousRowByColumn)
+
+		local leftCount, rightCount = 0, 0
+		for i, itemData in ipairs(items) do
+			local isLeft = (i <= COLUMN_SPLIT)
+			local column = isLeft and leftColumn or rightColumn
+			local pool = isLeft and leftRowPool or rightRowPool
+			local poolIndex = isLeft and i or (i - COLUMN_SPLIT)
+
+			local row = GetSlotRow(pool, column, poolIndex)
+			row.slotLabel:SetText(itemData.slot or "")
+
+			local previousRow = previousRowByColumn[column]
+			row:ClearAllPoints()
+			if previousRow then
+				row:SetPoint("TOPLEFT", previousRow, "BOTTOMLEFT", 0, -ROW_GAP)
+				row:SetPoint("TOPRIGHT", previousRow, "BOTTOMRIGHT", 0, -ROW_GAP)
+			else
+				row:SetPoint("TOPLEFT", column, "TOPLEFT")
+				row:SetPoint("TOPRIGHT", column, "TOPRIGHT")
+				firstRowByColumn[column] = row
+			end
+
+			RenderSlotRow(row, itemData)
+			row:Show()
+			previousRowByColumn[column] = row
+
+			if isLeft then
+				leftCount = leftCount + 1
+			else
+				rightCount = rightCount + 1
+			end
+		end
+
+		for i = leftCount + 1, #leftRowPool do
+			leftRowPool[i]:Hide()
+		end
+		for i = rightCount + 1, #rightRowPool do
+			rightRowPool[i]:Hide()
+		end
 	end
 
 	-- Trinket Tier List view ---------------------------------------------
@@ -609,11 +679,9 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 		end
 
 		local build = activeSourceId and GetBuild(activeSourceId, activeContext)
-		local items = build and build.items
+		local items = (build and build.items) or {}
 
-		for i, row in ipairs(rows) do
-			RenderSlotRow(row, items and items[i])
-		end
+		RenderSlotRows(items)
 
 		for context, button in pairs(contextButtons) do
 			local isActive = (context == activeContext)
