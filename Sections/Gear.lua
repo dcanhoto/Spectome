@@ -49,7 +49,7 @@ local VIEWS = {
 }
 local DEFAULT_VIEW = "bis"
 
-local TRINKET_TIER_ORDER = { "S", "A", "B", "C", "D" }
+local TRINKET_TIER_ORDER = { "S", "A", "B", "C", "D", "F" }
 -- Approximate rendered height of a GameFontNormal tier header line, used
 -- only to size the trinket scrollframe's content height (a slight
 -- overestimate just means a few extra px of scrollable space, not a bug).

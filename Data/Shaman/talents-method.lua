@@ -1,6 +1,6 @@
 -- Data/Shaman/talents-method.lua
--- Restoration talent data sourced from Method. Placeholder scaffold -- not
--- yet filled in (see SPECTOME_GUIDELINES.md "Data policy").
+-- Restoration talent data sourced from Method. Curated manually by the
+-- addon owner (see SPECTOME_GUIDELINES.md "Data policy").
 --
 -- One build per context (raid/mythicPlus), since guide sites often
 -- recommend different hero trees/talents depending on content type.
@@ -16,18 +16,18 @@ Spectome.Data.Shaman.Restoration.talents.method = {
 	source = "method",
 	class = "Shaman",
 	spec = "Restoration",
-	lastUpdated = "",
+	lastUpdated = "2026-09-05",
 	builds = {
 		{
 			context = "raid",
-			heroTalent = "",
-			loadoutString = "",
+			heroTalent = "Totemic",
+			loadoutString = "CgQAAAAAAAAAAAAAAAAAAAAAAAAAAgBAAAAzMzsssNjZGjZGzMMjFYDmxiGbDIzAbmBDWmZmRz2yMzmZMLsMzDMzYwsMAAAwMzgZGAYwM",
 			notes = "",
 		},
 		{
 			context = "mythicPlus",
-			heroTalent = "",
-			loadoutString = "",
+			heroTalent = "Totemic",
+			loadoutString = "CgQAAAAAAAAAAAAAAAAAAAAAAAAAAgBAAAAzMzsstMmZGjZmZMjZsAbwMW0YbAZGYjZMDz2MjRz2yMzmZMbsYMzYYZWmBAgBwMDmZAAYG",
 			notes = "",
 		},
 	},

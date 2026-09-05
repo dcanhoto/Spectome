@@ -1,10 +1,15 @@
 -- Data/Warrior/talents-method.lua
--- Arms talent data sourced from Method. Placeholder scaffold -- not
--- yet filled in (see SPECTOME_GUIDELINES.md "Data policy").
+-- Arms talent data sourced from Method. Curated manually by the addon
+-- owner (see SPECTOME_GUIDELINES.md "Data policy").
 --
--- One build per context (raid/mythicPlus), since guide sites often
--- recommend different hero trees/talents depending on content type.
--- PvE-focused only for now -- no pvp context (see Shared/Sources.lua).
+-- Method splits Arms raid talents further by target count, same as Icy
+-- Veins/Wowhead's data for this spec -- three builds
+-- (singleTargetRaid/multiTargetRaid/mythicPlus). Method's Mythic+ loadout
+-- string carries an unusual extra prefix segment not seen in the other
+-- three sources' strings for this spec -- that's exactly how Method
+-- exported it, so it's kept verbatim rather than reformatted to match; the
+-- import path (Shared/TalentImport.lua) reads and applies whatever
+-- C_Traits/C_ClassTalents accepts, it doesn't validate string shape.
 
 Spectome = Spectome or {}
 Spectome.Data = Spectome.Data or {}
@@ -16,18 +21,24 @@ Spectome.Data.Warrior.Arms.talents.method = {
 	source = "method",
 	class = "Warrior",
 	spec = "Arms",
-	lastUpdated = "",
+	lastUpdated = "2026-09-05",
 	builds = {
 		{
-			context = "raid",
-			heroTalent = "",
-			loadoutString = "",
+			context = "singleTargetRaid",
+			heroTalent = "Slayer",
+			loadoutString = "CcEAAAAAAAAAAAAAAAAAAAAAAAzMzsMzMmZGAAAghphZGzMWmZmZGMmZAAAAAMzyMDIMWWGYBMgZYCZGsBmZYsNwyMLDwMDAmhBA",
+			notes = "",
+		},
+		{
+			context = "multiTargetRaid",
+			heroTalent = "Slayer",
+			loadoutString = "CcEAAAAAAAAAAAAAAAAAAAAAAAzMzsMz8AmZGAAAghphZGzMWmZmZGMmZAAAAAMWmZgJMWWGYBMgZYCZGsBmZYsNYWmZbAmZAwMMA",
 			notes = "",
 		},
 		{
 			context = "mythicPlus",
-			heroTalent = "",
-			loadoutString = "",
+			heroTalent = "Slayer",
+			loadoutString = "CcEASWsDSHNyPDXnbxuIhH3ZdjZmZmFzYmZGAAAghphZGzMWmZmZGMmZAAAAAMWmZgJMW2GYBMgZYCZGsBmZYsNYWmZbAmZAwMMA",
 			notes = "",
 		},
 	},

@@ -1,6 +1,6 @@
 -- Data/Shaman/talents-wowhead.lua
--- Restoration talent data sourced from Wowhead. Placeholder scaffold -- not
--- yet filled in (see SPECTOME_GUIDELINES.md "Data policy").
+-- Restoration talent data sourced from Wowhead. Curated manually by the
+-- addon owner (see SPECTOME_GUIDELINES.md "Data policy").
 --
 -- One build per context (raid/mythicPlus), since guide sites often
 -- recommend different hero trees/talents depending on content type.
@@ -16,18 +16,18 @@ Spectome.Data.Shaman.Restoration.talents.wowhead = {
 	source = "wowhead",
 	class = "Shaman",
 	spec = "Restoration",
-	lastUpdated = "",
+	lastUpdated = "2026-09-05",
 	builds = {
 		{
 			context = "raid",
-			heroTalent = "",
-			loadoutString = "",
+			heroTalent = "Totemic",
+			loadoutString = "CgQAAAAAAAAAAAAAAAAAAAAAAAAAAgBAAAAzMzsssNjZGjZGzMDjFYDmxmGbDIzAbmhZw2YMTz2yMzmZMLsYegZGzwsMAAAwMzgZGAYwM",
 			notes = "",
 		},
 		{
 			context = "mythicPlus",
-			heroTalent = "",
-			loadoutString = "",
+			heroTalent = "Totemic",
+			loadoutString = "CgQAAAAAAAAAAAAAAAAAAAAAAAAAAgBAAAAzMzsstMzMzMjZGjZgFYDmxmGbDIzAbMzMY2mZMa2WmZ2MjZhFjZGDLzyAAAAzMDmZAgBzA",
 			notes = "",
 		},
 	},

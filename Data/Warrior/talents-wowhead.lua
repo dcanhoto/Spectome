@@ -1,10 +1,13 @@
 -- Data/Warrior/talents-wowhead.lua
--- Arms talent data sourced from Wowhead. Placeholder scaffold -- not
--- yet filled in (see SPECTOME_GUIDELINES.md "Data policy").
+-- Arms talent data sourced from Wowhead. Curated manually by the addon
+-- owner (see SPECTOME_GUIDELINES.md "Data policy").
 --
--- One build per context (raid/mythicPlus), since guide sites often
--- recommend different hero trees/talents depending on content type.
--- PvE-focused only for now -- no pvp context (see Shared/Sources.lua).
+-- Wowhead splits Arms raid talents further by target count, same as Icy
+-- Veins' data for this spec -- three builds
+-- (singleTargetRaid/multiTargetRaid/mythicPlus) instead of the usual two
+-- (raid/mythicPlus). See Data/Warrior/talents-icyveins.lua and
+-- Sections/Talents.lua's dynamic context switcher for why this doesn't
+-- need any other source or class/spec to match this shape.
 
 Spectome = Spectome or {}
 Spectome.Data = Spectome.Data or {}
@@ -16,18 +19,24 @@ Spectome.Data.Warrior.Arms.talents.wowhead = {
 	source = "wowhead",
 	class = "Warrior",
 	spec = "Arms",
-	lastUpdated = "",
+	lastUpdated = "2026-09-05",
 	builds = {
 		{
-			context = "raid",
-			heroTalent = "",
-			loadoutString = "",
+			context = "singleTargetRaid",
+			heroTalent = "Slayer",
+			loadoutString = "CcEAAAAAAAAAAAAAAAAAAAAAAAzMzsMzMmZGAAAghphxYmxyMzMzgxMDAAAAgZWmZAhxyyALgBMDTIzgNwMjtx2ALzsMAzMAYGGA",
+			notes = "",
+		},
+		{
+			context = "multiTargetRaid",
+			heroTalent = "Slayer",
+			loadoutString = "CcEAAAAAAAAAAAAAAAAAAAAAAAzMzsMzYmZGAAAghphxYmxyMzMzgxMDAAAAgZWmZgJMW2GYBMgZYCZGsBmZsN2GYZmtBYmBAzwA",
 			notes = "",
 		},
 		{
 			context = "mythicPlus",
-			heroTalent = "",
-			loadoutString = "",
+			heroTalent = "Slayer",
+			loadoutString = "CcEAAAAAAAAAAAAAAAAAAAAAAgZmZmFzYmZGAAAghphxYmZzMzMzYmxMDAAAAgxyMDMhxy2AbgBMDTIzgNwMDDDmlZ2GgZGAMDDA",
 			notes = "",
 		},
 	},
