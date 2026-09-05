@@ -5,13 +5,32 @@
 ## Version: 0.1.0
 ## SavedVariables: SpectomeDB
 ## SavedVariablesPerCharacter: SpectomeCharDB
+## IconTexture: Interface\AddOns\Spectome\Textures\icon
 
 Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+
+Data\DeathKnight\talents-icyveins.lua
+Data\DeathKnight\talents-wowhead.lua
+Data\DeathKnight\talents-archon.lua
+Data\DeathKnight\talents-method.lua
+Data\DeathKnight\gear-icyveins.lua
+Data\DeathKnight\gear-wowhead.lua
+Data\DeathKnight\gear-archon.lua
+Data\DeathKnight\gear-method.lua
 
 Shared\Sources.lua
+Shared\TalentImport.lua
 
 UI\MainFrame.lua
+UI\SourceDropdown.lua
 
 Sections\init.lua
+Sections\Talents.lua
+Sections\Gear.lua
+
+Settings.lua
 
 Spectome.lua

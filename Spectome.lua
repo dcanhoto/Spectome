@@ -19,8 +19,12 @@ local function CopyDefaults(defaults, target)
 	return target
 end
 
--- Empty for now — sections will add their own default keys as they're built.
-local DB_DEFAULTS = {}
+-- minimap.hide/minimapPos are read and written by LibDBIcon-1.0 itself
+-- (see the minimap button setup below) -- sections add their own default
+-- keys here as they're built.
+local DB_DEFAULTS = {
+	minimap = { hide = false },
+}
 local CHAR_DB_DEFAULTS = {}
 
 local initFrame = CreateFrame("Frame")
@@ -33,6 +37,32 @@ initFrame:SetScript("OnEvent", function(self, event, loadedAddonName)
 
 	Spectome.db = SpectomeDB
 	Spectome.charDB = SpectomeCharDB
+
+	-- Minimap button (LibDataBroker + LibDBIcon). Registered here, after
+	-- SpectomeDB.minimap has its defaults, since LDBIcon reads db.hide the
+	-- moment it's registered. `true` (silent) on both LibStub lookups so a
+	-- missing/broken lib degrades to "no minimap button" instead of an
+	-- addon-load error.
+	local LDB = LibStub("LibDataBroker-1.1", true)
+	local LDBIcon = LibStub("LibDBIcon-1.0", true)
+	if LDB and LDBIcon then
+		local dataObj = LDB:NewDataObject("Spectome", {
+			type = "launcher",
+			text = "Spectome",
+			icon = "Interface\\AddOns\\Spectome\\Textures\\icon",
+			OnClick = function()
+				if Spectome.ToggleMainFrame then
+					Spectome.ToggleMainFrame()
+				end
+			end,
+			OnTooltipShow = function(tooltip)
+				tooltip:AddLine("Spectome")
+				tooltip:AddLine("Click to open", 0.8, 0.8, 0.8)
+			end,
+		})
+		LDBIcon:Register("Spectome", dataObj, SpectomeDB.minimap)
+		Spectome.LDBIcon = LDBIcon
+	end
 
 	self:UnregisterEvent("ADDON_LOADED")
 end)

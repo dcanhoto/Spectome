@@ -1,7 +1,7 @@
 -- UI/MainFrame.lua
--- The main addon panel. Movable, closable, styled to match Blizzard's native
--- portrait-style panels. Sections/tabs get built into the content area here
--- in later sessions — for now this is just an empty shell.
+-- The main addon panel: movable, closable, styled to match Blizzard's native
+-- portrait-style panels. Owns the frame chrome only — section modules
+-- (loaded after this file) build their actual content into frame.Content.
 
 Spectome = Spectome or {}
 
@@ -10,6 +10,7 @@ frame:SetSize(600, 500)
 frame:SetPoint("CENTER")
 frame:SetFrameStrata("HIGH")
 frame:SetTitle("Spectome")
+frame:SetPortraitToAsset("Interface\\AddOns\\Spectome\\Textures\\icon")
 frame:Hide()
 
 -- Movable by dragging the frame (title bar area).
@@ -21,6 +22,14 @@ frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
 -- Let Escape close it, like other native Blizzard panels.
 table.insert(UISpecialFrames, "SpectomeMainFrame")
+
+-- Content area sections build their UI into. Loaded after this file (see
+-- Spectome.toc), each section reaches into Spectome.MainFrame.Content
+-- rather than the frame's chrome directly.
+local content = CreateFrame("Frame", nil, frame)
+content:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -60)
+content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
+frame.Content = content
 
 Spectome.MainFrame = frame
 
