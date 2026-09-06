@@ -9,7 +9,7 @@
 --   icon        (string)  texture path, e.g. "Interface\AddOns\Spectome\Textures\icyveins"
 --   provides    (array)   data types this source has content for — one or
 --                         more of: "guide", "talents", "gear", "stats",
---                         "crafting"
+--                         "crafting", "enchants", "consumables"
 --
 -- PvE-focused only for now -- no pvpTalents data type and no Murlok entry
 -- (Murlok only ever provided PvP talent data). Revisit if PvP support
@@ -24,25 +24,25 @@ Spectome.Sources = {
 		id = "icyveins",
 		displayName = "Icy Veins",
 		icon = "Interface\\AddOns\\Spectome\\Textures\\icyveins",
-		provides = { "guide", "talents", "gear", "stats", "crafting" },
+		provides = { "guide", "talents", "gear", "stats", "crafting", "enchants", "consumables" },
 	},
 	wowhead = {
 		id = "wowhead",
 		displayName = "Wowhead",
 		icon = "Interface\\AddOns\\Spectome\\Textures\\wowhead",
-		provides = { "guide", "talents", "gear", "stats", "crafting" },
+		provides = { "guide", "talents", "gear", "stats", "crafting", "enchants", "consumables" },
 	},
 	archon = {
 		id = "archon",
 		displayName = "Archon",
 		icon = "Interface\\AddOns\\Spectome\\Textures\\archon",
-		provides = { "talents", "gear", "stats" },
+		provides = { "talents", "gear", "stats", "enchants", "consumables" },
 	},
 	method = {
 		id = "method",
 		displayName = "Method",
 		icon = "Interface\\AddOns\\Spectome\\Textures\\method",
-		provides = { "guide", "talents", "gear" },
+		provides = { "guide", "talents", "gear", "stats", "enchants", "consumables" },
 	},
 }
 

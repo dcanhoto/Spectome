@@ -580,7 +580,20 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 				local header = GetTrinketTierHeader(tier)
 				header:ClearAllPoints()
 				if previousFrame then
-					header:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 0, -10)
+					-- Horizontal position anchors to trinketArea's fixed
+					-- LEFT edge, not `previousFrame` (the previous tier's
+					-- last trinket row, which itself sits +12 to the
+					-- right of ITS OWN header after the trinket-row fix
+					-- below) -- otherwise each tier header inherited the
+					-- prior tier's item indent, compounding into a
+					-- rightward drift the further down the list a tier
+					-- sat. Same bug class as the trinket-row fix, just one
+					-- level up (headers drifting relative to each other
+					-- instead of rows drifting within a tier) -- also
+					-- found and fixed in Sections/Enchants.lua's
+					-- RenderConsumablesList category headers.
+					header:SetPoint("TOP", previousFrame, "BOTTOM", 0, -10)
+					header:SetPoint("LEFT", trinketArea, "LEFT", 0, 0)
 					contentHeight = contentHeight + 10
 				else
 					header:SetPoint("TOPLEFT", trinketArea, "TOPLEFT", 0, 0)
@@ -594,7 +607,20 @@ Spectome.Sections:Register("gear", "Gear", function(content)
 					rowCount = rowCount + 1
 					local row = GetTrinketRow(rowCount)
 					row:ClearAllPoints()
-					row:SetPoint("TOPLEFT", previousFrame, "BOTTOMLEFT", 12, -4)
+					-- Horizontal position anchors to `header` (fixed for
+					-- this whole tier) via LEFT/RIGHT, independent of
+					-- vertical position, which still chains from
+					-- previousFrame via TOP -- anchoring the left edge to
+					-- the previous trinket row instead (as before) meant
+					-- each row inherited the +12 indent already baked into
+					-- the row above it, compounding into a rightward
+					-- "staircase" the more trinkets a tier had. TOP + LEFT
+					-- + RIGHT together fully determine the rect (height
+					-- comes from RenderTrinketRow's SetHeight) without
+					-- that compounding. Same fix as
+					-- Sections/Enchants.lua's RenderConsumablesList.
+					row:SetPoint("TOP", previousFrame, "BOTTOM", 0, -4)
+					row:SetPoint("LEFT", header, "LEFT", 12, 0)
 					row:SetPoint("RIGHT", trinketArea, "RIGHT")
 					RenderTrinketRow(row, trinketData)
 					row:Show()

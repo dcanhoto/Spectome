@@ -24,6 +24,18 @@ Data\DeathKnight\trinkets-icyveins.lua
 Data\DeathKnight\trinkets-wowhead.lua
 Data\DeathKnight\trinkets-archon.lua
 Data\DeathKnight\trinkets-method.lua
+Data\DeathKnight\stats-icyveins.lua
+Data\DeathKnight\stats-wowhead.lua
+Data\DeathKnight\stats-archon.lua
+Data\DeathKnight\stats-method.lua
+Data\DeathKnight\enchants-icyveins.lua
+Data\DeathKnight\enchants-wowhead.lua
+Data\DeathKnight\enchants-archon.lua
+Data\DeathKnight\enchants-method.lua
+Data\DeathKnight\consumables-icyveins.lua
+Data\DeathKnight\consumables-wowhead.lua
+Data\DeathKnight\consumables-archon.lua
+Data\DeathKnight\consumables-method.lua
 
 Data\Shaman\talents-icyveins.lua
 Data\Shaman\talents-wowhead.lua
@@ -54,6 +66,7 @@ Data\Warrior\trinkets-method.lua
 Shared\Sources.lua
 Shared\TalentImport.lua
 Shared\PlayerContext.lua
+Shared\ContextLabels.lua
 
 UI\MainFrame.lua
 UI\SourceDropdown.lua
@@ -61,6 +74,8 @@ UI\SourceDropdown.lua
 Sections\init.lua
 Sections\Talents.lua
 Sections\Gear.lua
+Sections\Stats.lua
+Sections\Enchants.lua
 
 Settings.lua
 

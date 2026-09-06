@@ -2,8 +2,9 @@
 -- Talents section: a source dropdown (Icy Veins/Wowhead/Archon/Method,
 -- showing the selected source's icon + name, via UI/SourceDropdown.lua), a
 -- context switcher underneath (Raid/Mythic+, or whatever set of contexts
--- the selected source's data actually splits builds by -- see CONTEXT_LABELS
--- below), and for whichever source+context is selected, the hero talent
+-- the selected source's data actually splits builds by -- see
+-- Shared/ContextLabels.lua), and for whichever source+context is selected,
+-- the hero talent
 -- name, notes (or a computed "recommended build" line when notes are
 -- empty), a copyable loadout export string, and an Apply Build button that
 -- imports it directly via Spectome.TalentImport (see Shared/TalentImport.lua).
@@ -23,22 +24,6 @@ Spectome = Spectome or {}
 
 local DATA_TYPE = "talents"
 local PLACEHOLDER_TEXT = "No data yet"
-
--- Display labels for known `context` keys -- matches the `context` field on
--- entries in each build's Data table. The switcher row itself is built
--- dynamically (see RebuildContextButtons below) from whatever distinct
--- context values are actually present in the selected source's builds, so
--- a source can split builds by two contexts (raid/mythicPlus) or three
--- (e.g. Arms Warrior's Icy Veins data splits raid further into
--- single-target/multi-target) without any code change here -- only this
--- label mapping needs a new entry. An unmapped key falls back to itself so
--- nothing silently breaks for a future context type.
-local CONTEXT_LABELS = {
-	raid = "Raid",
-	mythicPlus = "Mythic+",
-	singleTargetRaid = "Single-Target Raid",
-	multiTargetRaid = "Multi-Target Raid",
-}
 
 local function GetEntry(sourceId)
 	local classFolder, specName = Spectome.PlayerContext.Get()
@@ -68,7 +53,7 @@ local function DisplayOrPlaceholder(value)
 end
 
 local function GetContextLabel(context)
-	return CONTEXT_LABELS[context] or context
+	return Spectome.ContextLabels[context] or context
 end
 
 --- Returns the distinct `context` values present in sourceId's builds for
